@@ -7,7 +7,6 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#007bff" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
   <title>Sport App</title>
   <style>
     body {
@@ -56,17 +55,91 @@
     }
     .exo-toggle {
       display: flex;
-      justify-content: space-between;
       align-items: center;
       cursor: pointer;
       background-color: #eaeaea;
       padding: 0.5em;
       border-radius: 5px;
       user-select: none;
+      position: relative;
+      gap: 10px;
+    }
+    .exo-toggle .exo-arrow-btn {
+      background: #fff;
+      border: 2px solid #184d86b9;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3em;
+      font-weight: bold;
+      margin-right: 10px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      order: 0;
+    }
+    .exo-toggle .exo-arrow-btn:hover {
+      background: #184d86b9;
+      color: #fff;
+    }
+    .exo-toggle .exo-title-span {
+      flex: 1;
+      margin-left: 10px;
+      order: 1;
+      font-size: 1.1em;
+      text-align: left;
+    }
+    .exo-toggle .delete-exo-btn {
+      margin-left: auto;
+      margin-right: 0;
+      background: #fff;
+      color: #c00;
+      font-size: 1.2em;
+      border: 2px solid #c00;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      order: 2;
+      display: block;
+    }
+    .exo-toggle .delete-exo-btn:hover {
+      background: #c00;
+      color: #fff;
+    }
+    .exo.open .exo-toggle .delete-exo-btn {
+      display: none;
+    }
+    .exo.open .exo-toggle .exo-arrow-btn {
+      transform: rotate(180deg);
+    }
+    .exo.open .exo-toggle .exo-title-span {
+      margin-left: 10px;
     }
     .exo-body {
       display: none;
       margin-top: 1em;
+      position: relative;
+    }
+    .exo.open .exo-body {
+      display: block;
+    }
+    .delete-exo-btn-detail {
+      background: #fff;
+      color: #c00;
+      border: 2px solid #c00;
+      border-radius: 5px;
+      padding: 0.4em 0.8em;
+      float: right;
+      margin-bottom: 0.5em;
+      margin-left: 0.5em;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .delete-exo-btn-detail:hover {
+      background: #c00;
+      color: #fff;
     }
     #timer {
       text-align: center;
@@ -166,11 +239,13 @@
       container.className = "exo";
 
       container.innerHTML = `
-        <div class="exo-toggle" onclick="toggleExoBody(this)">
-          <span id="exoTitle${exoId}">Nouvel exercice</span>
-          <span>▼</span>
+        <div class="exo-toggle">
+          <button type="button" class="exo-arrow-btn">▼</button>
+          <span class="exo-title-span" id="exoTitle${exoId}">Nouvel exercice</span>
+          <button type="button" class="delete-exo-btn" tabindex="-1">🗑️</button>
         </div>
         <div class="exo-body">
+          <button type="button" class="delete-exo-btn-detail">Supprimer</button>
           <input type="text" placeholder="Nom de l'exercice" oninput="document.getElementById('exoTitle${exoId}').innerText = this.value || 'Nouvel exercice'; saveExosToStorage()">
           <select onchange="toggleMode(this, ${exoId}); saveExosToStorage()">
             <option value="reps">Répétitions</option>
@@ -183,16 +258,39 @@
       `;
 
       document.getElementById("exos").appendChild(container);
+
+      // Toggle
+      const header = container.querySelector(".exo-toggle");
+      const arrowBtn = header.querySelector(".exo-arrow-btn");
+      arrowBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleExoBody(header);
+      };
+      // Remove click from header itself
+      header.onclick = null;
+
+      // Delete handlers
+      const delBtn = header.querySelector(".delete-exo-btn");
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        deleteExo(exoId);
+      };
+      const delBtnDetail = container.querySelector(".delete-exo-btn-detail");
+      delBtnDetail.onclick = (e) => {
+        e.stopPropagation();
+        deleteExo(exoId);
+      };
     }
 
     function toggleExoBody(header) {
-      const body = header.nextElementSibling;
-      if(body.style.display === "block") {
-        body.style.display = "none";
-        header.querySelector("span:last-child").innerText = "▼";
+      const exo = header.closest('.exo');
+      if(exo.classList.contains('open')) {
+        exo.classList.remove('open');
       } else {
-        body.style.display = "block";
-        header.querySelector("span:last-child").innerText = "▲";
+        document.querySelectorAll('.exo.open').forEach(e => {
+          e.classList.remove('open');
+        });
+        exo.classList.add('open');
       }
     }
 
@@ -339,16 +437,7 @@
       updateProgressBar(0);
       document.getElementById("timer").innerText = "";
     }
-  </script>
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js")
-        .then(() => console.log("Service Worker enregistré"))
-        .catch(err => console.error("Erreur Service Worker:", err));
-    }
-  </script>
-  <!-- 💾 AJOUT DE LA SAUVEGARDE AUTOMATIQUE -->
-  <script>
+
     function saveExosToStorage() {
       const data = [];
       document.querySelectorAll(".exo").forEach((exoElem, index) => {
@@ -378,10 +467,37 @@
       });
     }
 
-    // Appel automatique au chargement de la page
+    function deleteExo(index) {
+      const exosList = document.querySelectorAll(".exo");
+      if (exosList[index]) {
+        exosList[index].remove();
+        saveExosToStorage();
+        // Réindexe les IDs pour éviter les bugs
+        document.querySelectorAll(".exo").forEach((exoElem, idx) => {
+          exoElem.querySelector(".exo-title-span").id = `exoTitle${idx}`;
+          exoElem.querySelector("input[type=text]").oninput = function() {
+            document.getElementById(`exoTitle${idx}`).innerText = this.value || "Nouvel exercice";
+            saveExosToStorage();
+          };
+          exoElem.querySelector("select").setAttribute("onchange", `toggleMode(this, ${idx}); saveExosToStorage()`);
+          exoElem.querySelector(`[id^='series']`).setAttribute("id", `series${idx}`);
+          exoElem.querySelector(`[id^='unit']`).setAttribute("id", `unit${idx}`);
+          exoElem.querySelector(`[id^='pause']`).setAttribute("id", `pause${idx}`);
+        });
+      }
+    }
+
+    // Initialisation
     window.onload = () => {
       loadExosFromStorage();
-     };
+    };
+
+    // Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js")
+        .then(() => console.log("Service Worker enregistré"))
+        .catch(err => console.error("Erreur Service Worker:", err));
+    }
   </script>
 </body>
 </html>
